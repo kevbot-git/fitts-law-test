@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fitts' Law</title>
+
+    <script>
+        var w = window.innerWidth;
+        var h = window.innerHeight;
+        
+        var addr = "ws://127.0.0.1:8080/play";
+        var ws = new WebSocket(addr);
+
+        ws.onopen = () => {
+            console.log("Websocket connected to " + addr);
+
+            // Send the client's screen width and height to the server.
+            sendDimensions();
+        };
+
+        ws.onmessage = (evt) => {
+            var rsp = JSON.parse(evt.data);
+            spawnCircle(rsp.x, rsp.y, rsp.dimensions.height, rsp.dimensions.width);
+        };
+
+        ws.onclose = () => {
+            console.log("Websocket connection closed.");
+        };
+
+        function sendDimensions() {
+            var data = JSON.stringify({width: w, height: h});
+            ws.send(data);
+        };
+
+        function spawnCircle(x, y, width, height) {
+            console.log("Spawning a circle on the DOM at location: X: " + x + " Y: " + y + " Width: " + width + " Height: " + height);
+
+            var c = document.getElementById("container");
+            
+            // Create our circle with the given parameters.
+            var circle = document.createElement("div");
+            circle.style.width = width + "px";
+            circle.style.height = height + "px";
+            circle.style.background = "red";
+            circle.style.position = "absolute";
+            circle.style.top = y + "px";
+            circle.style.left = x + "px"
+
+            circle.onclick = () => {
+                c.removeChild(circle);
+            };
+
+            // Add the circle to the DOM.
+            c.appendChild(circle);
+        };
+    </script>
+</head>
+
+<body>
+    <div id="container"></div>
+</body>
+</html>
