@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"math/rand"
 	"net/http"
 	"time"
+
+	"os"
 
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
@@ -91,9 +94,25 @@ func Game(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	g.start()
 }
 
+// Index page runs the index.html page which contains the game logic.
+func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	wd, err := os.Getwd()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	t, err := template.ParseFiles(wd + "/index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	t.Execute(w, nil)
+}
+
 func main() {
 	r := httprouter.New()
-	r.GET("/play", Game)
+
+	r.GET("/", Index)
+	r.GET("/ws", Game)
 
 	s := &http.Server{
 		Addr:         addr,
