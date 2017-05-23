@@ -2,19 +2,35 @@
 <html>
 <head>
     <title>Fitts' Law</title>
+    <style>
+        #play-button {
+            text-align: center;
+            background-color: #a1a1FF;
+            border-radius: 3px;
+            width: 20%;
+            height: 50px;
+        }
 
+        #text {
+            color: "white";
+        }
+
+        #stats-box {
+            display: none;
+        }
+    </style>
+    
     <script>
         var w = window.innerWidth;
         var h = window.innerHeight;
         
         var addr = "ws://127.0.0.1:8080/ws";
         var ws = new WebSocket(addr);
+        var open = false;
 
         ws.onopen = () => {
             console.log("Websocket connected to " + addr);
-
-            // Send the client's screen width and height to the server.
-            sendDimensions();
+            open = true;
         };
 
         ws.onmessage = (evt) => {
@@ -26,36 +42,65 @@
             console.log("Websocket connection closed.");
         };
 
-        function sendDimensions() {
-            var data = JSON.stringify({width: w, height: h});
-            ws.send(data);
-        };
-
         function spawnCircle(x, y, width, height) {
-            console.log("Spawning a circle on the DOM at location: X: " + x + " Y: " + y + " Width: " + width + " Height: " + height);
-
+            var start = new Date();
             var c = document.getElementById("container");
             
             // Create our circle with the given parameters.
             var circle = document.createElement("div");
             circle.style.width = width + "px";
             circle.style.height = height + "px";
-            circle.style.background = "red";
+            circle.style.background = '#0000FF';
             circle.style.position = "absolute";
             circle.style.top = y + "px";
             circle.style.left = x + "px"
+            circle.style.borderRadius =  "100%";
 
-            circle.onclick = () => {
+            circle.onclick = (evt) => {
+                var timeTaken = (new Date()-start) / 1000;
+
+                document.getElementById("latest-time").innerHTML = parseFloat(timeTaken);
+
+                var hitCounter = document.getElementById("hit");
+                // +1 to the hit counter.
+                document.getElementById("hit").innerText = (parseInt(hitCounter.innerText) + 1).toString();
+                sendStats(evt.clientX, evt.clientY, x, y, width, height);
                 c.removeChild(circle);
             };
 
             // Add the circle to the DOM.
             c.appendChild(circle);
         };
+
+        function sendDimensions() {
+            var data = JSON.stringify({width: w, height: h});
+            ws.send(data);
+        };
+
+        function sendStats(circleX, circleY, clickX, clickY, width, height) {
+            var stats = {circleX: circleX, circleY: circleY, clickX: clickX, clickY: clickY, dimensions: {width: width, height: height}};
+            ws.send(JSON.stringify(stats));
+        }
+
+        function play() {
+            document.getElementById("container").removeChild(document.getElementById("play-button"));
+            document.getElementById("stats-box").style.display = "block";
+            if (!open) { alert("Hmm"); }
+            sendDimensions();
+        }
     </script>
 </head>
 
 <body>
-    <div id="container"></div>
+    <div id="container">
+        <div id="stats-box">
+            <p>Hit: <span id="hit">0</span>/20</p>
+            <p>Latest time: <span id="latest-time"></span></p>
+        </div>
+
+        <div id="play-button" onclick="play()">
+            <span id="text">Click this button to start the test</span>
+        </div>
+    </div>
 </body>
 </html>

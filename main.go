@@ -28,8 +28,9 @@ var upgrader = websocket.Upgrader{
 }
 
 type game struct {
-	conn *websocket.Conn
-	d    Dimensions
+	conn  *websocket.Conn
+	d     Dimensions
+	stats []ClickStats
 }
 
 // Dimensions of the users browser window.
@@ -45,13 +46,55 @@ type Circle struct {
 	Dimensions `json:"dimensions"`
 }
 
+// ClickStats show the location of the circle and the coordinates of the click that removed it.
+type ClickStats struct {
+	CircleX    int `json:"circleX"`
+	CircleY    int `json:"circleY"`
+	ClickX     int `json:"clickX"`
+	ClickY     int `json:"clickY"`
+	Dimensions `json:"dimensions"`
+}
+
+func main() {
+	r := httprouter.New()
+
+	r.GET("/", Index)
+	r.GET("/ws", Game)
+
+	s := &http.Server{
+		Addr:         addr,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		Handler:      r,
+	}
+	log.Printf("Starting server at: %v\n", addr)
+	log.Fatal(s.ListenAndServe())
+}
+
 // NewCircle creates a new random circle.
-func NewCircle(maxX, maxY int) Circle {
-	size := randomInt(30, 120)
+func NewCircle(d Dimensions) Circle {
+	size := randomInt(5, 120)
+
+	x := randomInt(0, d.Width)
+	y := randomInt(0, d.Height)
+
+	// Make sure the circle doesn't go out of bounds.
+	if x-size < 0 {
+		x += size
+	}
+	if x+size > d.Width {
+		x -= size
+	}
+	if y+size > d.Height {
+		y -= size
+	}
+	if y-size < 0 {
+		y += size
+	}
 
 	return Circle{
-		X: randomInt(0, maxX),
-		Y: randomInt(0, maxY),
+		X: x,
+		Y: y,
 		Dimensions: Dimensions{
 			Width:  size,
 			Height: size,
@@ -64,17 +107,49 @@ func randomInt(min, max int) int {
 	return rand.Intn(max-min) + min
 }
 
+func (c ClickStats) difference() (int, int) {
+	return 0, 0
+}
+
+func (c ClickStats) String() string {
+	return fmt.Sprintf("Circle located at: X (%d), Y (%d) with dimensions: Width (%d), Height (%d), was clicked at: X (%d), Y (%d)",
+		c.CircleX, c.CircleY, c.Width, c.Height, c.ClickX, c.ClickY)
+}
+
+func (g game) sendCircle() error {
+	c := NewCircle(g.d)
+	return g.conn.WriteJSON(&c)
+}
+
 func (g game) start() {
-	// Every second send a randomly sized circle to the client.
-	for range time.Tick(time.Second) {
-		c := NewCircle(g.d.Width, g.d.Height)
-		if err := g.conn.WriteJSON(&c); err != nil {
+	count := 1
+
+	// Send the initial circle.
+	if err := g.sendCircle(); err != nil {
+		log.Fatal(err)
+	}
+
+	for {
+		if count == 20 {
+			break
+		}
+
+		// Receive the click stats for the given circle.
+		var cs ClickStats
+		if err := g.conn.ReadJSON(&cs); err != nil {
+			log.Fatal(err)
+		}
+		g.stats = append(g.stats, cs)
+		fmt.Println(cs)
+		count++
+
+		if err := g.sendCircle(); err != nil {
 			log.Fatal(err)
 		}
 	}
 }
 
-// Game is the main handler for the Fitts' Law game.
+// Game is the main (Websocket) handler for the Fitts' Law game.
 func Game(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -94,7 +169,7 @@ func Game(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	g.start()
 }
 
-// Index page runs the index.html page which contains the game logic.
+// Index page runs the index.html page which contains the game client.
 func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -106,19 +181,4 @@ func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	t.Execute(w, nil)
-}
-
-func main() {
-	r := httprouter.New()
-
-	r.GET("/", Index)
-	r.GET("/ws", Game)
-
-	s := &http.Server{
-		Addr:         addr,
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		Handler:      r,
-	}
-	log.Fatal(s.ListenAndServe())
 }
