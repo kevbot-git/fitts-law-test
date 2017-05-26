@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	addr         = ":8080"
 	readTimeout  = time.Second * 5
 	writeTimeout = time.Second * 10
 	bufferSize   = 1024
@@ -62,12 +61,11 @@ func main() {
 	r.GET("/ws", Game)
 
 	s := &http.Server{
-		Addr:         addr,
+		Addr:         ":" + os.Getenv("PORT"),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		Handler:      r,
 	}
-	log.Printf("Starting server at: %v\n", addr)
 	log.Fatal(s.ListenAndServe())
 }
 
