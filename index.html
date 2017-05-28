@@ -24,8 +24,10 @@
         var w = window.innerWidth;
         var h = window.innerHeight;
         
-        var addr = "ws://127.0.0.1:8080/ws";
-        var ws = new WebSocket(addr);
+        // Change dis if running locally.
+        var addr = "ws://172.28.105.12:8080/ws";
+        
+		var ws = new WebSocket(addr);
         var open = false;
 
         ws.onopen = () => {
@@ -64,7 +66,7 @@
                 var hitCounter = document.getElementById("hit");
                 // +1 to the hit counter.
                 document.getElementById("hit").innerText = (parseInt(hitCounter.innerText) + 1).toString();
-                sendStats(evt.clientX, evt.clientY, x, y, width, height);
+                sendStats(evt.clientX, evt.clientY, x, y, width, height, timeTaken);
                 c.removeChild(circle);
             };
 
@@ -77,8 +79,8 @@
             ws.send(data);
         };
 
-        function sendStats(circleX, circleY, clickX, clickY, width, height) {
-            var stats = {circleX: circleX, circleY: circleY, clickX: clickX, clickY: clickY, dimensions: {width: width, height: height}};
+        function sendStats(circleX, circleY, clickX, clickY, width, height, timeTaken) {
+            var stats = {circleX: circleX, circleY: circleY, clickX: clickX, clickY: clickY, dimensions: {width: width, height: height}, timeTaken: timeTaken};
             ws.send(JSON.stringify(stats));
         }
 

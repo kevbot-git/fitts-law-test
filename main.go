@@ -6,18 +6,23 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
-	"os"
+	"path/filepath"
+
+	"encoding/json"
+	"errors"
 
 	"github.com/gorilla/websocket"
 	"github.com/julienschmidt/httprouter"
 )
 
 const (
-	readTimeout  = time.Second * 5
-	writeTimeout = time.Second * 10
-	bufferSize   = 1024
+	addr = ":8080"
+	//readTimeout  = time.Second * 5
+	//writeTimeout = time.Second * 10
+	bufferSize = 1024
 )
 
 var upgrader = websocket.Upgrader{
@@ -27,9 +32,11 @@ var upgrader = websocket.Upgrader{
 }
 
 type game struct {
-	conn  *websocket.Conn
-	d     Dimensions
-	stats []ClickStats
+	conn     *websocket.Conn
+	d        Dimensions
+	stats    []ClickStats
+	name     string
+	testType string
 }
 
 // Dimensions of the users browser window.
@@ -52,19 +59,24 @@ type ClickStats struct {
 	ClickX     int `json:"clickX"`
 	ClickY     int `json:"clickY"`
 	Dimensions `json:"dimensions"`
+	TimeTaken  float64 `json:"timeTaken"`
 }
 
 func main() {
+	if len(os.Args) < 3 {
+		log.Fatal("args")
+	}
+
 	r := httprouter.New()
 
 	r.GET("/", Index)
 	r.GET("/ws", Game)
 
 	s := &http.Server{
-		Addr:         ":" + os.Getenv("PORT"),
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		Handler:      r,
+		Addr: addr,
+		//ReadTimeout:  readTimeout,
+		//WriteTimeout: writeTimeout,
+		Handler: r,
 	}
 	log.Fatal(s.ListenAndServe())
 }
@@ -109,18 +121,34 @@ func (c ClickStats) difference() (int, int) {
 	return 0, 0
 }
 
-func (c ClickStats) String() string {
-	return fmt.Sprintf("Circle located at: X (%d), Y (%d) with dimensions: Width (%d), Height (%d), was clicked at: X (%d), Y (%d)",
-		c.CircleX, c.CircleY, c.Width, c.Height, c.ClickX, c.ClickY)
-}
-
 func (g game) sendCircle() error {
 	c := NewCircle(g.d)
 	return g.conn.WriteJSON(&c)
 }
 
+func (g game) save() error {
+	f, err := os.Create(filepath.Join("./tests/" + fmt.Sprintf("%s-%s.json", g.name, g.testType)))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	b, err := json.Marshal(&g.stats)
+	if err != nil {
+		return err
+	}
+	n, err := f.Write(b)
+	if err != nil {
+		return err
+	}
+	if len(b) > 0 && n == 0 {
+		return errors.New("146????")
+	}
+	return nil
+}
+
 func (g game) start() {
-	count := 1
+	count := 0
 
 	// Send the initial circle.
 	if err := g.sendCircle(); err != nil {
@@ -129,6 +157,10 @@ func (g game) start() {
 
 	for {
 		if count == 20 {
+			if err := g.save(); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println("Saving in ./tests")
 			break
 		}
 
@@ -138,7 +170,6 @@ func (g game) start() {
 			log.Fatal(err)
 		}
 		g.stats = append(g.stats, cs)
-		fmt.Println(cs)
 		count++
 
 		if err := g.sendCircle(); err != nil {
@@ -163,20 +194,22 @@ func Game(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 
 	log.Printf("Recieved dimensions: Width: %d, Height: %d\n", d.Width, d.Height)
 
-	g := game{conn: conn, d: d}
+	g := game{conn: conn, d: d, name: os.Args[1], testType: os.Args[2]}
 	g.start()
 }
 
-// Index page runs the index.html page which contains the game client.
+// Index ...
 func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	wd, err := os.Getwd()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	t, err := template.ParseFiles(wd + "/index.html")
+	t, err := template.ParseFiles(filepath.Join(wd, "/index.html"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	t.Execute(w, nil)
 }
