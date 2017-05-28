@@ -83,7 +83,7 @@ func main() {
 
 // NewCircle creates a new random circle.
 func NewCircle(d Dimensions) Circle {
-	size := randomInt(5, 120)
+	size := randomInt(20, 120)
 
 	x := randomInt(0, d.Width)
 	y := randomInt(0, d.Height)
